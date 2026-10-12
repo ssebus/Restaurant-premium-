@@ -1,0 +1,2400 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Rezerwacji - Kiosk Restauracyjny</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #e67e22;
+            --vip-color: #9b59b6;
+            --bg-color: #f5f6fa;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 10px;
+            color: #333;
+        }
+
+        /* --- EKRAN POWITALNY Z ANIMOWANYM TŁEM RESTAURACYJNYM --- */
+        #welcomeOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vw;
+            background: linear-gradient(135deg, #0f172a, #1e293b, #b45309);
+            background-size: 300% 300%;
+            animation: restaurantBgMove 12s ease infinite;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        @keyframes restaurantBgMove {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Ruchome elementy w tle (efekt żywej restauracji) */
+        .bg-floating-item {
+            position: absolute;
+            font-size: 50px;
+            opacity: 0.15;
+            animation: floatRandom 8s infinite linear;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes floatRandom {
+            0% { transform: translateY(105vh) rotate(0deg); }
+            100% { transform: translateY(-10vh) rotate(360deg); }
+        }
+
+        .welcome-modal {
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(12px);
+            width: 100%;
+            max-width: 480px;
+            padding: 30px 25px;
+            border-radius: 24px;
+            text-align: center;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+            animation: popInModal 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            z-index: 2;
+            box-sizing: border-box;
+        }
+
+        @keyframes popInModal {
+            0% { transform: scale(0.6); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .lang-selector {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .lang-btn {
+            background: #f1f2f6;
+            border: 2px solid #dfe4ea;
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.2s;
+            width: auto;
+            color: #333;
+        }
+
+        .lang-btn.active {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+            transform: scale(1.05);
+        }
+
+        /* KAFELKI WYBORU TYPU ZAMÓWIENIA */
+        .order-type-grid {
+            display: flex;
+            gap: 12px;
+            margin: 15px 0;
+        }
+
+        .order-type-tile {
+            flex: 1;
+            background: #f8f9fa;
+            border: 3px solid #dfe4ea;
+            border-radius: 16px;
+            padding: 20px 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            user-select: none;
+        }
+
+        .order-type-tile:hover {
+            border-color: var(--accent-color);
+            background: #fffdfa;
+        }
+
+        .order-type-tile.selected {
+            background: #fff5ec;
+            border-color: var(--accent-color);
+            box-shadow: 0 5px 15px rgba(230, 126, 34, 0.3);
+            transform: scale(1.03);
+        }
+
+        .tile-icon {
+            font-size: 38px;
+            margin-bottom: 8px;
+        }
+
+        .tile-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .start-order-btn {
+            background: linear-gradient(135deg, #e67e22, #d35400);
+            color: white;
+            padding: 14px;
+            font-size: 17px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(230, 126, 34, 0.4);
+            transition: all 0.2s;
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .start-order-btn:disabled {
+            background: #bdc3c7;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .start-order-btn:not(:disabled):hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 20px rgba(230, 126, 34, 0.6);
+        }
+
+        .start-chef-login {
+            margin-top: 20px;
+            border-top: 1px dashed #ddd;
+            padding-top: 12px;
+        }
+
+        .start-chef-login summary {
+            font-size: 13px;
+            color: #7f8c8d;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* --- OKNO BEZCZYNNOŚCI --- */
+        #inactivityOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 13000;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+
+        .inactivity-card {
+            background: #fff;
+            width: 100%;
+            max-width: 360px;
+            padding: 25px 20px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            animation: popInModal 0.3s ease;
+        }
+
+        /* --- EKRAN POTWIERDZENIA / PARAGON --- */
+        #orderSuccessOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 11000;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+
+        .receipt-card {
+            background: #fff;
+            width: 100%;
+            max-width: 380px;
+            padding: 25px 20px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            animation: popInModal 0.4s ease;
+            position: relative;
+        }
+
+        .receipt-number-badge {
+            background: linear-gradient(135deg, var(--accent-color), #d35400);
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            padding: 12px;
+            border-radius: 12px;
+            margin: 15px 0;
+            letter-spacing: 2px;
+            box-shadow: 0 4px 10px rgba(230,126,34,0.3);
+        }
+
+        .receipt-details {
+            background: #f8f9fa;
+            border: 1px dashed #cbd5e1;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: left;
+            font-size: 13px;
+            margin: 15px 0;
+            max-height: 140px;
+            overflow-y: auto;
+        }
+
+        .auto-next-text {
+            font-size: 11px;
+            color: #7f8c8d;
+            margin-top: 8px;
+        }
+
+        /* --- EKRAN PODZIĘKOWAŃ --- */
+        #thankYouOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 12000;
+            padding: 15px;
+            box-sizing: border-box;
+            color: white;
+            text-align: center;
+            animation: fadeInOverlay 0.4s ease;
+        }
+
+        .thank-you-box {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 30px 20px;
+            border-radius: 20px;
+            max-width: 380px;
+            width: 100%;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+
+        .countdown-circle {
+            position: relative;
+            width: 90px;
+            height: 90px;
+            margin: 20px auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 26px;
+            font-weight: bold;
+            background: rgba(0,0,0,0.2);
+            border-radius: 50%;
+            border: 4px solid rgba(255,255,255,0.4);
+            animation: pulseCircle 1s infinite alternate;
+        }
+
+        @keyframes pulseCircle {
+            from { transform: scale(1); }
+            to { transform: scale(1.05); }
+        }
+
+        /* --- PRZYCISK EXIT NA SAMEJ GÓRZE --- */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .btn-exit-top {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 13px;
+            cursor: pointer;
+            width: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 2px 6px rgba(231, 76, 60, 0.3);
+            transition: background 0.2s;
+        }
+
+        .btn-exit-top:hover {
+            background: #c0392b;
+        }
+
+        /* --- ZEGAR W NAGŁÓWKU --- */
+        .live-clock {
+            background: #edf2f7;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 14px;
+            color: var(--primary-color);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        /* --- GŁÓWNY KOD STYLÓW --- */
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        h1, h2, h3 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        .vip-title {
+            color: var(--vip-color);
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        hr {
+            border: 0;
+            height: 1px;
+            background: #ddd;
+            margin: 20px 0;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .amount-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+        }
+
+        .amount-group select {
+            flex: 1.5;
+        }
+
+        .amount-group input {
+            flex: 1.5;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: var(--primary-color);
+            font-size: 15px;
+        }
+
+        .optional-text {
+            font-size: 12px;
+            color: #7f8c8d;
+            font-weight: normal;
+            font-style: italic;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 15px;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--accent-color);
+            outline: none;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: var(--vip-color);
+            font-weight: bold;
+            margin-top: 2px;
+            margin-bottom: 8px;
+        }
+
+        /* KAFELKI VIP */
+        .vip-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 5px;
+        }
+
+        .vip-option {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            text-align: left;
+            user-select: none;
+        }
+
+        .vip-option.selected {
+            background: #f3e5f5;
+            border-color: var(--vip-color);
+            color: #4a148c;
+            font-weight: bold;
+            box-shadow: inset 3px 0 0 var(--vip-color);
+        }
+
+        .vip-unlock-box {
+            background: #f3e5f5;
+            border: 2px dashed var(--vip-color);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .vip-special-fields {
+            background: #faf5ff;
+            border-left: 5px solid var(--vip-color);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .dynamic-fields-container {
+            background: #fdfefe;
+            border: 1px solid #e2e8f0;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .sub-field {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed #e2e8f0;
+        }
+        .sub-field:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        /* PANEL RYSOWANIA PODPISU */
+        .signature-container {
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            background: #fafafa;
+            position: relative;
+            margin-bottom: 5px;
+            overflow: hidden;
+        }
+
+        #signaturePad {
+            display: block;
+            width: 100%;
+            height: 160px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        .signature-line {
+            position: absolute;
+            bottom: 35px;
+            left: 5%;
+            width: 90%;
+            border-bottom: 1px dashed #b2bec3;
+            pointer-events: none;
+        }
+
+        .signature-hint {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 11px;
+            color: #b2bec3;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            color: white;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary { background-color: var(--accent-color); }
+        .btn-primary:hover { background-color: #d35400; }
+        
+        .btn-vip { background-color: var(--vip-color); }
+        .btn-vip:hover { background-color: #8e44ad; }
+
+        .btn-secondary { background-color: #7f8c8d; }
+        .btn-secondary:hover { background-color: #647475; }
+
+        .chef-section {
+            background: #edf2f7;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 25px;
+        }
+
+        .btn-now-style {
+            background: #ffffff;
+            color: #333333;
+            border: 1px solid #cccccc;
+            transition: all 0.2s ease;
+        }
+        .btn-now-style.active-now {
+            background: var(--accent-color) !important;
+            color: #ffffff !important;
+            border-color: var(--accent-color) !important;
+            font-weight: bold;
+        }
+
+        .reservation-card {
+            background: white;
+            padding: 8px 10px;
+            margin-top: 8px;
+            border-radius: 6px;
+            border-left: 4px solid var(--accent-color);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .reservation-card.vip-card {
+            border-left: 4px solid var(--vip-color);
+            background: #fff9ff;
+        }
+
+        .badge-vip {
+            background: var(--vip-color);
+            color: white;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .mini-vip-details {
+            margin-top: 4px;
+            padding: 4px;
+            background: #f3e5f5;
+            border-radius: 4px;
+            font-size: 12px;
+            border-left: 2px solid var(--vip-color);
+        }
+
+        .chef-signature-img {
+            display: block;
+            height: 50px;
+            width: auto;
+            background: #ffffff;
+            border-radius: 4px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .btn-danger { background-color: #e74c3c; width: auto; padding: 4px 8px; font-size: 12px; margin-right: 5px; }
+        .btn-danger:hover { background-color: #c0392b; }
+        .btn-edit { background-color: #3498db; width: auto; padding: 4px 8px; font-size: 12px; margin-right: 5px; }
+        .btn-edit:hover { background-color: #2980b9; }
+        .btn-small { padding: 6px 12px; font-size: 13px; display: inline-block; margin-top: 5px;}
+
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+            margin-top: 6px;
+            justify-content: flex-end;
+        }
+
+        .pass-box {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .chef-order-item {
+            margin-bottom: 4px;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border-left: 2px solid #cbd5e1;
+        }
+    </style>
+</head>
+<body>
+
+<!-- EKRAN POWITALNY (FULLSCREEN KIOSK STYLE Z ANIMACJAMI W TLE) -->
+<div id="welcomeOverlay">
+    <!-- Unoszące się animowane ikony w tle -->
+    <div class="bg-floating-item" style="left: 10%; animation-duration: 7s; animation-delay: 0s;">🍔</div>
+    <div class="bg-floating-item" style="left: 25%; animation-duration: 9s; animation-delay: 2s;">🥤</div>
+    <div class="bg-floating-item" style="left: 45%; animation-duration: 6s; animation-delay: 1s;">🍟</div>
+    <div class="bg-floating-item" style="left: 65%; animation-duration: 10s; animation-delay: 3s;">🍕</div>
+    <div class="bg-floating-item" style="left: 80%; animation-duration: 8s; animation-delay: 1.5s;">🍿</div>
+
+    <div class="welcome-modal">
+        <div style="font-size: 40px; margin-bottom: 5px;">🍔✨🥤</div>
+        <h2 id="welcomeTitle">Witamy w systemie rezerwacji!</h2>
+        <p id="welcomeSubtitle" style="color: #555; font-size: 13px; margin-bottom: 10px;">Wybierz język oraz typ zamówienia:</p>
+        
+        <div class="lang-selector">
+            <button type="button" class="lang-btn active" onclick="setLanguage('pl')">🇵🇱 PL</button>
+            <button type="button" class="lang-btn" onclick="setLanguage('en')">🇬🇧 EN</button>
+            <button type="button" class="lang-btn" onclick="setLanguage('de')">🇩🇪 DE</button>
+        </div>
+
+        <!-- KAFELKI NA START -->
+        <div class="order-type-grid">
+            <div class="order-type-tile" id="tileOnSite" onclick="selectWelcomeType('onSite')">
+                <div class="tile-icon">🏠</div>
+                <div class="tile-title" id="tileOnSiteText">Na miejscu</div>
+            </div>
+            <div class="order-type-tile" id="tileTakeAway" onclick="selectWelcomeType('takeAway')">
+                <div class="tile-icon">🛍️</div>
+                <div class="tile-title" id="tileTakeAwayText">Na wynos</div>
+            </div>
+        </div>
+
+        <button type="button" class="start-order-btn" id="startBtnText" onclick="closeWelcome()" disabled>Wybierz typ zamówienia ➔</button>
+
+        <details class="start-chef-login">
+            <summary id="chefLoginToggleText">🔑 Szybkie logowanie kucharza</summary>
+            <div style="margin-top: 8px;">
+                <input type="password" id="startChefPass" placeholder="Hasło kucharza" style="font-size: 13px; padding: 8px; margin-bottom: 8px;">
+                <button type="button" class="btn-primary" style="font-size: 13px; padding: 8px;" onclick="quickChefLogin()">Wejdź do panelu</button>
+            </div>
+        </details>
+    </div>
+</div>
+
+<!-- EKRAN WYKRYWANIA BEZCZYNNOŚCI -->
+<div id="inactivityOverlay">
+    <div class="inactivity-card">
+        <div style="font-size: 40px; margin-bottom: 10px;">❓🤔</div>
+        <h3 id="inactivityTitle" style="margin-top:0;">Czy nadal tu jesteś?</h3>
+        <p id="inactivityDesc" style="font-size: 13px; color: #666;">Brak aktywności. Ekran zamknie się za:</p>
+        <div style="font-size: 28px; font-weight: bold; color: var(--accent-color); margin: 10px 0;" id="inactivitySecDisplay">10</div>
+        
+        <div style="display: flex; gap: 8px; margin-top: 15px;">
+            <button type="button" class="btn-primary" id="btnStayHere" onclick="keepSessionAlive()">Tak, jestem!</button>
+            <button type="button" class="btn-secondary" id="btnExitNow" onclick="returnToWelcomeScreen()">Wyjdź</button>
+        </div>
+    </div>
+</div>
+
+<!-- EKRAN POTWIERDZENIA / PARAGON -->
+<div id="orderSuccessOverlay">
+    <div class="receipt-card">
+        <div style="font-size: 40px;">🧾✨</div>
+        <h2 id="receiptAcceptedTitle" style="margin-bottom: 5px;">Zamówienie przyjęte!</h2>
+        <p id="receiptSaveNumText" style="font-size: 13px; color: #666; margin-top: 0;">Proszę zapisać swój numer zamówienia:</p>
+        
+        <div class="receipt-number-badge" id="receiptOrderNum">#101</div>
+        
+        <div class="receipt-details" id="receiptSummaryContent"></div>
+
+        <button type="button" class="btn-primary" id="receiptNextBtn" onclick="proceedToThankYou()" style="font-size: 16px; padding: 12px;">Dalej ➔</button>
+        <div class="auto-next-text"><span id="receiptAutoText">Automatyczne przejście dalej za:</span> <b id="receiptAutoNextSec">10</b>s</div>
+    </div>
+</div>
+
+<!-- EKRAN PODZIĘKOWAŃ -->
+<div id="thankYouOverlay">
+    <div class="thank-you-box">
+        <div style="font-size: 45px;">🎉</div>
+        <h2 id="thankYouTitle">Dziękujemy za zamówienie!</h2>
+        <p id="thankYouSub" style="font-size: 14px; opacity: 0.9;">Twoje zamówienie trafiło do kuchni.</p>
+        
+        <div class="countdown-circle" id="countdownDisplay">5</div>
+        <p id="thankYouReturn" style="font-size: 12px; opacity: 0.8;">Powrót do ekranu głównego...</p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="top-bar">
+        <button type="button" class="btn-exit-top" onclick="returnToWelcomeScreen()">
+            🚪 <span id="lblExitTop">Wyjdź</span>
+        </button>
+        <div class="live-clock" id="liveClockDisplay">
+            ⏱️ 00:00:00
+        </div>
+    </div>
+
+    <h1 id="mainTitle">🍕 System Zamówień 🥤</h1>
+    
+    <form id="reservationForm">
+        <div class="form-group">
+            <label for="category" id="lblCategory">Co wybierasz?</label>
+            <select id="category" onchange="handleCategoryChange()" required>
+                <!-- Generowane dynamicznie -->
+            </select>
+        </div>
+
+        <div id="vipUnlockBox" class="vip-unlock-box">
+            <label for="vipInputPassword" id="lblVipPass" style="color: var(--vip-color);">Ta sekcja jest zablokowana. Podaj hasło VIP:</label>
+            <input type="password" id="vipInputPassword" placeholder="Wpisz hasło VIP">
+            <button type="button" class="btn-vip btn-small" id="btnUnlockVip" onclick="verifyVipPassword()" style="margin-top: 10px; width:100%;">Odblokuj Menu VIP</button>
+        </div>
+
+        <div class="dynamic-fields-container" id="dynamicFieldsContainer"></div>
+
+        <div class="form-group">
+            <label for="extras" id="lblExtras">Dodatki (np. sosy, przyprawy) <span class="optional-text">(opcjonalne)</span></label>
+            <input type="text" id="extras" placeholder="Np. sos czosnkowy, ketchup">
+        </div>
+
+        <input type="hidden" id="deliveryType" required>
+
+        <div class="form-group" id="locationGroup" style="display: none;">
+            <label for="deliveryLocation" id="lblDeliveryLoc">Gdzie zanieść zamówienie (Take away)?</label>
+            <select id="deliveryLocation" onchange="handleLocationChange()">
+                <!-- Opcje lokalizacji -->
+            </select>
+            <input type="text" id="customLocationInput" placeholder="Wpisz gdzie dostarczyć..." style="display: none; margin-top: 8px;">
+        </div>
+
+        <div id="vipSpecialFields" class="vip-special-fields">
+            <h3 class="vip-title" id="lblVipTitle">👑 Opcje Ekskluzywne VIP</h3>
+            
+            <div class="form-group">
+                <label id="lblVipWish1">Życzenia w jedzeniu i przekąskach:</label>
+                <div class="help-text" id="lblVipInstruction1">👉 Instrukcja: Wybierz dokładnie 2 opcje z poniższych:</div>
+                <div class="vip-grid" id="gridExtras">
+                    <div class="vip-option" data-value="🧀 Dodatkowy potrójny ser">🧀 Dodatkowy roztopiony potrójny ser</div>
+                    <div class="vip-option" data-value="🍿 Wysoka piramida z chrupek/chipsów">🍿 Wysoka piramida z chrupek, chipsów lub nachosów</div>
+                    <div class="vip-option" data-value="🍓 Wysoka piramida z owoców">🍓 Kolorowa, wysoka piramida ułożona ze świeżych owoców</div>
+                    <div class="vip-option" data-value="🍬 Słodka niespodzianka (żelki/czekolada)">🍬 Słodka niespodzianka (żelki, pianki lub czekolada)</div>
+                    <div class="vip-option" data-value="🎨 Wzorek lub napis z ketchupu/sosu">🎨 Fajny wzorek lub napis zrobiony z ketchupu na talerzu</div>
+                    <div class="vip-option" data-value="🍏 Świeże owoce pokrojone w cząstki">🍏 Świeże owoce pokrojone w ładne cząstki</div>
+                    <div class="vip-option" data-value="🧂 Zestaw różnych sosów do maczania">🧂 Zestaw ułożonych obok siebie różnych sosów domowych</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label id="lblVipWish2">Sposób podania & Domowe Napoje:</label>
+                <div class="help-text" id="lblVipInstruction2">👉 Instrukcja: Wybierz dokładnie 2 opcje z poniższych:</div>
+                <div class="vip-grid" id="gridServing">
+                    <div class="vip-option" data-value="🥤 Napój z lodem i rurką">🥤 Napój z dużą ilością kostek lodu i kolorową rurką</div>
+                    <div class="vip-option" data-value="🍋 Szklanka z plasterkiem owocu">🍋 Szklanka udekorowana plasterkiem cytryny lub pomarańczy</div>
+                    <div class="vip-option" data-value="🍽️ Podanie na największym talerzu">🍽️ Podanie na największym i najładniejszym talerzu</div>
+                    <div class="vip-option" data-value="⭐ Ekskluzywny sposób podania VIP">⭐ Zamówienie podane w specjalny, ekskluzywny sposób VIP</div>
+                    <div class="vip-option" data-value="🏷️ Karteczka z Twoim imieniem">🏷️ Przyklejona do szklanki karteczka z Twoim imieniem</div>
+                    <div class="vip-option" data-value="🍽️ Karteczka z Twoim imieniem na talerzu">🍽️ Przyklejona do talerza karteczka z Twoim imieniem</div>
+                    <div class="vip-option" data-value="🔊 Głośna muzyka przy wniesieniu">🔊 Wniesienie jedzenia przy głośnej muzyce z telefonu</div>
+                    <div class="vip-option" data-value="🎵 Cicha/romantyczna/usypiająca muzyka przy wniesieniu">🎵 Wniesienie przy cichej romantycznej lub usypiającej muzyce</div>
+                    <div class="vip-option" data-value="📻 Muzyka w tle podczas całego jedzenia">📻 Muzyka grająca przez cały czas jedzenia</div>
+                    <div class="vip-option" data-value="🔥 Przygotowanie z efektem ognia (Live Cooking)">🔥 Przygotowanie potrawy z widowiskowym efektem ognia</div>
+                    <div class="vip-option" data-value="🫖 Nalewanie napoju z klasą (z samej góry)">🫖 Eleganckie nalewanie z dużej wysokości z klasą</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SELEKTOR DATY I GODZINY -->
+        <div class="form-group">
+            <label for="customDateInput" id="lblTimeTarget">Na kiedy ma być gotowe? <span class="optional-text">(minimum 15 min, co 15 minut)</span></label>
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <input type="date" id="customDateInput" style="flex: 1;" onchange="renderCustomTimeSlots()">
+                <button type="button" class="btn-now-style" onclick="selectNowTime()" style="width: auto; padding: 8px 14px; font-size: 14px; border-radius: 6px; cursor: pointer;" id="btnNowText">Teraz ⏱️</button>
+            </div>
+            <div id="customTimeSlotsContainer" style="max-height: 160px; overflow-y: auto; border: 1px solid #ccc; border-radius: 6px; background: #fafafa; padding: 6px; display: flex; flex-direction: column; gap: 4px;"></div>
+            <input type="hidden" id="timeTarget" required>
+        </div>
+
+        <div class="form-group">
+            <label for="clientName" id="lblClientName">Imię i Nazwisko</label>
+            <input type="text" id="clientName" placeholder="Jan Kowalski" required>
+        </div>
+
+        <div class="form-group">
+            <label id="lblSignature">Podpisz się poniżej (Zamaluj palcem) <span style="color: #e74c3c;">*wymagane</span>:</label>
+            <div class="signature-container">
+                <div class="signature-line"></div>
+                <div class="signature-hint" id="lblSignatureHint">Tutaj złóż podpis</div>
+                <canvas id="signaturePad"></canvas>
+            </div>
+            <button type="button" class="btn-secondary btn-small" id="btnClearSignature" onclick="clearSignature()" style="width:auto; margin-top:0;">Wyczyść podpis</button>
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn-primary">Złóż rezerwację</button>
+    </form>
+
+    <hr>
+
+    <div class="chef-section">
+        <h2 id="lblChefTitle">👨‍🍳 Panel Kucharza 👨‍🍳</h2>
+
+        <div style="margin-bottom: 15px; text-align: center;">
+            <span style="font-size: 12px; font-weight: bold; color: #555; display: block; margin-bottom: 4px;" id="lblChefLang">Język panelu kucharza:</span>
+            <div class="lang-selector" style="margin: 0;">
+                <button type="button" class="lang-btn active" id="chefLangPl" onclick="setChefLanguage('pl')">🇵🇱 PL</button>
+                <button type="button" class="lang-btn" id="chefLangEn" onclick="setChefLanguage('en')">🇬🇧 EN</button>
+                <button type="button" class="lang-btn" id="chefLangDe" onclick="setChefLanguage('de')">🇩🇪 DE</button>
+            </div>
+        </div>
+        
+        <div id="loginForm">
+            <div class="form-group">
+                <label for="chefPassword" id="lblChefPass">Podaj hasło kucharza:</label>
+                <input type="password" id="chefPassword" placeholder="Wpisz hasło">
+            </div>
+            <button type="button" class="btn-primary" id="btnChefLogin" onclick="checkPassword()">Wejdź do panelu</button>
+        </div>
+
+        <div id="chefContent" style="display: none;">
+            
+            <div class="pass-box" style="border: 1px solid var(--accent-color);">
+                <label id="lblConfigNames" style="color: var(--accent-color); margin-bottom: 8px;">⚙️ Ustawienia nazw: Na miejscu / Na wynos</label>
+                
+                <div style="font-size: 12px; font-weight: bold; margin-top: 4px;">🇵🇱 Język Polski:</div>
+                <div style="display: flex; gap: 5px; margin-bottom: 4px;">
+                    <input type="text" id="cfgPlOnSite" placeholder="Na miejscu" style="padding: 5px; font-size: 13px;">
+                    <input type="text" id="cfgPlTakeAway" placeholder="Na wynos" style="padding: 5px; font-size: 13px;">
+                </div>
+
+                <div style="font-size: 12px; font-weight: bold; margin-top: 4px;">🇬🇧 Język Angielski:</div>
+                <div style="display: flex; gap: 5px; margin-bottom: 4px;">
+                    <input type="text" id="cfgEnOnSite" placeholder="Dine-in" style="padding: 5px; font-size: 13px;">
+                    <input type="text" id="cfgEnTakeAway" placeholder="Take away" style="padding: 5px; font-size: 13px;">
+                </div>
+
+                <div style="font-size: 12px; font-weight: bold; margin-top: 4px;">🇩🇪 Język Niemiecki:</div>
+                <div style="display: flex; gap: 5px; margin-bottom: 4px;">
+                    <input type="text" id="cfgDeOnSite" placeholder="Vor Ort" style="padding: 5px; font-size: 13px;">
+                    <input type="text" id="cfgDeTakeAway" placeholder="Zum Mitnehmen" style="padding: 5px; font-size: 13px;">
+                </div>
+                <button type="button" class="btn-primary btn-small" onclick="saveCustomLabels()" style="margin-top: 5px;">Zapisz nazwy opcji</button>
+            </div>
+
+            <div class="pass-box">
+                <label for="newPassword" id="lblChangeChefPass">Zmień hasło Kucharza:</label>
+                <input type="text" id="newPassword" placeholder="Nowe hasło" style="margin-bottom: 5px; padding: 6px;">
+                <button type="button" class="btn-edit btn-small" id="btnSaveChefPass" onclick="changePassword('chefPassword', 'newPassword')">Zapisz hasło kucharza</button>
+            </div>
+
+            <div class="pass-box" style="border: 1px solid var(--vip-color);">
+                <label for="newVipPassword" id="lblChangeVipPass" style="color: var(--vip-color);">Zmień hasło VIP:</label>
+                <input type="text" id="newVipPassword" placeholder="Nowe hasło VIP" style="margin-bottom: 5px; padding: 6px;">
+                <button type="button" class="btn-vip btn-small" id="btnSaveVipPass" onclick="changePassword('vipPassword', 'newVipPassword')">Zapisz hasło VIP</button>
+            </div>
+
+            <h3 id="lblOrderListTitle">Lista Zamówień</h3>
+            <div id="reservationsList"></div>
+            
+            <button type="button" class="btn-danger btn-small" id="btnChefLogout" onclick="logoutChef()" style="margin-top: 15px; width: 100%;">Wyloguj się</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentLanguage = 'pl';
+    let currentChefLanguage = 'pl';
+    let selectedWelcomeType = ''; 
+    let isNowSelected = false; 
+
+    // --- ŻYWY ZEGAR Z SEKUNDAMI ---
+    function updateLiveClock() {
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const clockEl = document.getElementById('liveClockDisplay');
+        if (clockEl) {
+            clockEl.innerHTML = `⏱️ ${hours}:${minutes}:${seconds}`;
+        }
+    }
+    setInterval(updateLiveClock, 1000);
+    updateLiveClock();
+
+    function getCustomLabels() {
+        return {
+            pl: {
+                onSite: localStorage.getItem('lbl_pl_onSite') || 'Na miejscu',
+                takeAway: localStorage.getItem('lbl_pl_takeAway') || 'Na wynos'
+            },
+            en: {
+                onSite: localStorage.getItem('lbl_en_onSite') || 'Dine-in',
+                takeAway: localStorage.getItem('lbl_en_takeAway') || 'Take away'
+            },
+            de: {
+                onSite: localStorage.getItem('lbl_de_onSite') || 'Vor Ort',
+                takeAway: localStorage.getItem('lbl_de_takeAway') || 'Zum Mitnehmen'
+            }
+        };
+    }
+
+    function saveCustomLabels() {
+        localStorage.setItem('lbl_pl_onSite', document.getElementById('cfgPlOnSite').value || 'Na miejscu');
+        localStorage.setItem('lbl_pl_takeAway', document.getElementById('cfgPlTakeAway').value || 'Na wynos');
+        localStorage.setItem('lbl_en_onSite', document.getElementById('cfgEnOnSite').value || 'Dine-in');
+        localStorage.setItem('lbl_en_takeAway', document.getElementById('cfgEnTakeAway').value || 'Take away');
+        localStorage.setItem('lbl_de_onSite', document.getElementById('cfgDeOnSite').value || 'Vor Ort');
+        localStorage.setItem('lbl_de_takeAway', document.getElementById('cfgDeTakeAway').value || 'Zum Mitnehmen');
+
+        alert('Zapisano nowe nazwy opcji!');
+        updateWelcomeTiles();
+        renderReservations();
+    }
+
+    function loadConfigInputs() {
+        const labels = getCustomLabels();
+        document.getElementById('cfgPlOnSite').value = labels.pl.onSite;
+        document.getElementById('cfgPlTakeAway').value = labels.pl.takeAway;
+        document.getElementById('cfgEnOnSite').value = labels.en.onSite;
+        document.getElementById('cfgEnTakeAway').value = labels.en.takeAway;
+        document.getElementById('cfgDeOnSite').value = labels.de.onSite;
+        document.getElementById('cfgDeTakeAway').value = labels.de.takeAway;
+    }
+
+    function updateWelcomeTiles() {
+        const labels = getCustomLabels()[currentLanguage];
+        document.getElementById('tileOnSiteText').innerText = labels.onSite;
+        document.getElementById('tileTakeAwayText').innerText = labels.takeAway;
+
+        const t = uiTranslations[currentLanguage];
+        const startBtn = document.getElementById('startBtnText');
+        if (!selectedWelcomeType) {
+            startBtn.innerText = t.selectTypePrompt || "Wybierz typ zamówienia ➔";
+        } else {
+            startBtn.innerText = t.startBtn;
+        }
+    }
+
+    function selectWelcomeType(type) {
+        selectedWelcomeType = type;
+        const labels = getCustomLabels()[currentLanguage];
+        const t = uiTranslations[currentLanguage];
+
+        document.getElementById('tileOnSite').classList.remove('selected');
+        document.getElementById('tileTakeAway').classList.remove('selected');
+
+        if (type === 'onSite') {
+            document.getElementById('tileOnSite').classList.add('selected');
+            document.getElementById('deliveryType').value = labels.onSite;
+        } else {
+            document.getElementById('tileTakeAway').classList.add('selected');
+            document.getElementById('deliveryType').value = labels.takeAway;
+        }
+
+        const startBtn = document.getElementById('startBtnText');
+        startBtn.disabled = false;
+        startBtn.innerText = t.startBtn;
+    }
+
+    const dictionary = {
+        'jedzenie': { pl: 'Jedzenie', en: 'Food', de: 'Essen' },
+        'picie': { pl: 'Picie', en: 'Drink', de: 'Getränk' },
+        'przekąski': { pl: 'Przekąski', en: 'Snacks', de: 'Snacks' },
+        'brak': { pl: 'brak', en: 'none', de: 'keine' },
+        'nie podano': { pl: 'Nie podano', en: 'Not specified', de: 'Nicht angegeben' },
+        'klient': { pl: 'Klient', en: 'Client', de: 'Kunde' },
+        'ilość': { pl: 'Ilość', en: 'Amount', de: 'Menge' },
+        'ogólne dodatki': { pl: 'Ogólne dodatki', en: 'General extras', de: 'Zusätze' },
+        'miejsce dostawy': { pl: 'Miejsce dostawy / odbioru', en: 'Delivery location', de: 'Lieferort' },
+        'typ dostawy': { pl: 'Typ zamówienia', en: 'Order type', de: 'Bestellart' },
+        'podpis': { pl: 'Podpis', en: 'Signature', de: 'Unterschrift' },
+        'gotowe na': { pl: 'Gotowe na', en: 'Ready for', de: 'Fertig um' },
+        'życzenia': { pl: 'Życzenia', en: 'Wishes', de: 'Wünsche' },
+        'podanie': { pl: 'Podanie', en: 'Serving', de: 'Servieren' },
+        'edytuj': { pl: 'Edytuj', en: 'Edit', de: 'Bearbeiten' },
+        'usuń': { pl: 'Usuń', en: 'Delete', de: 'Löschen' },
+        'teraz': { pl: 'Teraz', en: 'Now', de: 'Jetzt' },
+        'pokój': { pl: 'Pokój', en: 'Room', de: 'Zimmer' },
+        'salon': { pl: 'Salon', en: 'Living Room', de: 'Wohnzimmer' },
+        'jadalnia': { pl: 'Jadalnia', en: 'Dining Room', de: 'Esszimmer' },
+        'kuchnia': { pl: 'Kuchnia', en: 'Kitchen', de: 'Küche' },
+        'sypialnia': { pl: 'Sypialnia', en: 'Bedroom', de: 'Schlafzimmer' },
+        'pokój dziecięcy': { pl: 'Pokój dziecięcy', en: "Children's room", de: 'Kinderzimmer' },
+        'biurko / pokój do pracy': { pl: 'Biurko / Pokój do pracy', en: 'Desk / Office room', de: 'Schreibtisch / Arbeitszimmer' },
+        'balkon': { pl: 'Balkon', en: 'Balcony', de: 'Balkon' },
+        'taras': { pl: 'Taras', en: 'Terrace', de: 'Terrasse' },
+        'ogród / podwórko': { pl: 'Ogród / Podwórko', en: 'Garden / Yard', de: 'Garten / Hof' },
+        'garaż / warsztat': { pl: 'Garaż / Warsztat', en: 'Garage / Workshop', de: 'Garage / Werkstatt' },
+        'przed drzwi pokoju': { pl: 'Przed drzwi pokoju', en: 'In front of room door', de: 'Vor der Zimmertür' },
+        'do łóżka': { pl: 'Do łóżka', en: 'To bed', de: 'Ins Bett' },
+        'inne': { pl: 'Inne miejsce...', en: 'Other location...', de: 'Anderer Ort...' }
+    };
+
+    function translateTerm(text, targetLang) {
+        if(!text) return '';
+        let lower = text.trim().toLowerCase();
+        const custom = getCustomLabels()[targetLang];
+        if (text === getCustomLabels().pl.onSite || text === getCustomLabels().en.onSite || text === getCustomLabels().de.onSite) return custom.onSite;
+        if (text === getCustomLabels().pl.takeAway || text === getCustomLabels().en.takeAway || text === getCustomLabels().de.takeAway) return custom.takeAway;
+
+        if(dictionary[lower] && dictionary[lower][targetLang]) {
+            return dictionary[lower][targetLang];
+        }
+        return text; 
+    }
+
+    const categoriesTranslations = {
+        pl: [
+            { val: "Jedzenie", text: "🍕 Jedzenie" },
+            { val: "Picie", text: "🥤 Picie" },
+            { val: "Przekąski", text: "🍿 Przekąski" },
+            { val: "Jedzenie i Picie", text: "🍕🥤 Jedzenie i Picie" },
+            { val: "Jedzenie i Przekąski", text: "🍕🍿 Jedzenie i Przekąski" },
+            { val: "Picie i Przekąski", text: "🥤🍿 Picie i Przekąski" },
+            { val: "Wszystko (Jedzenie, Picie i Przekąski)", text: "🍕🥤🍿 Wszystko (Jedzenie, Picie i Przekąski)" },
+            { val: "VIP", text: "⭐ Opcja VIP (Wymaga Hasła)" }
+        ],
+        en: [
+            { val: "Jedzenie", text: "🍕 Food" },
+            { val: "Picie", text: "🥤 Drink" },
+            { val: "Przekąski", text: "🍿 Snacks" },
+            { val: "Jedzenie i Picie", text: "🍕🥤 Food & Drink" },
+            { val: "Jedzenie i Przekąski", text: "🍕🍿 Food & Snacks" },
+            { val: "Picie i Przekąski", text: "🥤🍿 Drink & Snacks" },
+            { val: "Wszystko (Jedzenie, Picie i Przekąski)", text: "🍕🥤🍿 All (Food, Drink & Snacks)" },
+            { val: "VIP", text: "⭐ VIP Option (Password required)" }
+        ],
+        de: [
+            { val: "Jedzenie", text: "🍕 Essen" },
+            { val: "Picie", text: "🥤 Getränk" },
+            { val: "Przekąski", text: "🍿 Snacks" },
+            { val: "Jedzenie i Picie", text: "🍕🥤 Essen & Getränk" },
+            { val: "Jedzenie i Przekąski", text: "🍕🍿 Essen & Snacks" },
+            { val: "Picie i Przekąski", text: "🥤🍿 Getränk & Snacks" },
+            { val: "Wszystko (Jedzenie, Picie i Przekąski)", text: "🍕🥤🍿 Alles (Essen, Getränk & Snacks)" },
+            { val: "VIP", text: "⭐ VIP-Option (Passwort erforderlich)" }
+        ]
+    };
+
+    const locationOptionsTranslations = {
+        pl: [
+            { val: "Pokój", text: "🛏️ Pokój" },
+            { val: "Salon", text: "🛋️ Salon" },
+            { val: "Jadalnia", text: "🍽️ Jadalnia" },
+            { val: "Kuchnia", text: "🍳 Kuchnia" },
+            { val: "Sypialnia", text: "🛏️ Sypialnia" },
+            { val: "Pokój dziecięcy", text: "🧸 Pokój dziecięcy" },
+            { val: "Biurko / Pokój do pracy", text: "💻 Biurko / Pokój do pracy" },
+            { val: "Balkon", text: "🌿 Balkon" },
+            { val: "Taras", text: "☀️ Taras" },
+            { val: "Ogród / Podwórko", text: "🏡 Ogród / Podwórko" },
+            { val: "Garaż / Warsztat", text: "🚗 Garaż / Warsztat" },
+            { val: "Przed drzwi pokoju", text: "🚪 Przed drzwi pokoju" },
+            { val: "Do łóżka", text: "🛌 Do łóżka" },
+            { val: "Inne", text: "📍 Inne miejsce..." }
+        ],
+        en: [
+            { val: "Pokój", text: "🛏️ Room" },
+            { val: "Salon", text: "🛋️ Living Room" },
+            { val: "Jadalnia", text: "🍽️ Dining Room" },
+            { val: "Kuchnia", text: "🍳 Kitchen" },
+            { val: "Sypialnia", text: "🛏️ Bedroom" },
+            { val: "Pokój dziecięcy", text: "🧸 Children's Room" },
+            { val: "Biurko / Pokój do pracy", text: "💻 Desk / Office" },
+            { val: "Balkon", text: "🌿 Balcony" },
+            { val: "Taras", text: "☀️ Terrace" },
+            { val: "Ogród / Podwórko", text: "🏡 Garden / Yard" },
+            { val: "Garaż / Warsztat", text: "🚗 Garage / Workshop" },
+            { val: "Przed drzwi pokoju", text: "🚪 In front of room door" },
+            { val: "Do łóżka", text: "🛌 To bed" },
+            { val: "Inne", text: "📍 Other location..." }
+        ],
+        de: [
+            { val: "Pokój", text: "🛏️ Zimmer" },
+            { val: "Salon", text: "🛋️ Wohnzimmer" },
+            { val: "Jadalnia", text: "🍽️ Esszimmer" },
+            { val: "Kuchnia", text: "🍳 Küche" },
+            { val: "Sypialnia", text: "🛏️ Schlafzimmer" },
+            { val: "Pokój dziecięcy", text: "🧸 Kinderzimmer" },
+            { val: "Biurko / Pokój do pracy", text: "💻 Schreibtisch / Arbeitszimmer" },
+            { val: "Balkon", text: "🌿 Balkon" },
+            { val: "Taras", text: "☀️ Terrasse" },
+            { val: "Ogród / Podwórko", text: "🏡 Garten / Hof" },
+            { val: "Garaż / Warsztat", text: "🚗 Garage / Werkstatt" },
+            { val: "Przed drzwi pokoju", text: "🚪 Vor der Zimmertür" },
+            { val: "Do łóżka", text: "🛌 Ins Bett" },
+            { val: "Inne", text: "📍 Anderer Ort..." }
+        ]
+    };
+
+    const uiTranslations = {
+        pl: {
+            title: "Witamy w systemie rezerwacji!",
+            subtitle: "Wybierz język oraz typ zamówienia:",
+            selectTypePrompt: "Najpierw wybierz typ zamówienia powyżej 👆",
+            startBtn: "Rozpocznij Zamówienie 🚀",
+            chefToggle: "🔑 Szybkie logowanie kucharza",
+            exitTop: "Wyjdź",
+            mainTitle: "🍕 System Zamówień 🥤",
+            category: "Co wybierasz?",
+            extras: "Dodatki (np. sosy, przyprawy) (opcjonalne)",
+            extrasPlaceholder: "Np. sos czosnkowy, ketchup",
+            customLocPlaceholder: "Wpisz gdzie dostarczyć...",
+            takeAwayLoc: "Gdzie zanieść zamówienie (Take away)?",
+            vipTitle: "👑 Opcje Ekskluzywne VIP",
+            timeTarget: "Na kiedy ma być gotowe? (minimum 15 min, co 15 minut)",
+            nowBtn: "Teraz ⏱️",
+            clientName: "Imię i Nazwisko",
+            signature: "Podpisz się poniżej (Zamaluj palcem) *wymagane:",
+            signatureHint: "Tutaj złóż podpis",
+            clearSig: "Wyczyść podpis",
+            submitBtn: "Złóż rezerwację",
+            inactTitle: "Czy nadal tu jesteś?",
+            inactDesc: "Brak aktywności. Ekran zamknie się za:",
+            btnStay: "Tak, jestem!",
+            btnExit: "Wyjdź",
+            recAccepted: "Zamówienie przyjęte!",
+            recSaveNum: "Proszę zapisać swój numer zamówienia:",
+            recNext: "Dalej ➔",
+            recAuto: "Automatyczne przejście dalej za:",
+            thxTitle: "Dziękujemy za zamówienie!",
+            thxSub: "Twoje zamówienie trafiło do kuchni.",
+            thxReturn: "Powrót do ekranu głównego...",
+            foodLabel: "🍕 Co z jedzenia chcesz zamówić?",
+            foodPlaceholder: "Wpisz swoje zamówienie (np. Hamburger)...",
+            foodValPlaceholder: "Ile? (np. 1 lub 250)",
+            drinkLabel: "🥤 Co do picia chcesz zamówić?",
+            drinkPlaceholder: "Wpisz swoje zamówienie (np. Sok pomarańczowy)...",
+            drinkValPlaceholder: "Ile? (np. 1 lub 250)",
+            snackLabel: "🍿 Jakie przekąski chcesz zamówić?",
+            snackPlaceholder: "Wpisz swoje zamówienie (np. Chipsy solone)...",
+            snackValPlaceholder: "Ile? (np. 1 lub 250)"
+        },
+        en: {
+            title: "Welcome to the reservation system!",
+            subtitle: "Choose your language and order type:",
+            selectTypePrompt: "Please select order type above first 👆",
+            startBtn: "Start Order 🚀",
+            chefToggle: "🔑 Quick Chef Login",
+            exitTop: "Exit",
+            mainTitle: "🍕 Order System 🥤",
+            category: "What do you choose?",
+            extras: "Extras (e.g. sauces, spices) (optional)",
+            extrasPlaceholder: "E.g. garlic sauce, ketchup",
+            customLocPlaceholder: "Type delivery location...",
+            takeAwayLoc: "Where to bring the order (Take away)?",
+            vipTitle: "👑 Exclusive VIP Options",
+            timeTarget: "When should it be ready? (min. 15 min, every 15 min)",
+            nowBtn: "Now ⏱️",
+            clientName: "First Name and Last Name",
+            signature: "Sign below (Draw with your finger) *required:",
+            signatureHint: "Sign here",
+            clearSig: "Clear signature",
+            submitBtn: "Place Reservation",
+            inactTitle: "Are you still here?",
+            inactDesc: "Inactivity detected. Screen closes in:",
+            btnStay: "Yes, I'm here!",
+            btnExit: "Exit",
+            recAccepted: "Order Accepted!",
+            recSaveNum: "Please write down your order number:",
+            recNext: "Next ➔",
+            recAuto: "Automatic transition in:",
+            thxTitle: "Thank you for your order!",
+            thxSub: "Your order has been sent to the kitchen.",
+            thxReturn: "Returning to main screen...",
+            foodLabel: "🍕 What food would you like to order?",
+            foodPlaceholder: "Enter your food order (e.g. Burger)...",
+            foodValPlaceholder: "Amount? (e.g. 1 or 250)",
+            drinkLabel: "🥤 What drink would you like to order?",
+            drinkPlaceholder: "Enter your drink order (e.g. Orange juice)...",
+            drinkValPlaceholder: "Amount? (e.g. 1 or 250)",
+            snackLabel: "🍿 What snacks would you like to order?",
+            snackPlaceholder: "Enter your snack order (e.g. Salted chips)...",
+            snackValPlaceholder: "Amount? (e.g. 1 or 250)"
+        },
+        de: {
+            title: "Willkommen im Reservierungssystem!",
+            subtitle: "Wählen Sie Sprache und Bestellart:",
+            selectTypePrompt: "Bitte wählen Sie zuerst die Bestellart oben 👆",
+            startBtn: "Bestellung starten 🚀",
+            chefToggle: "🔑 Schneller Koch-Login",
+            exitTop: "Beenden",
+            mainTitle: "🍕 Bestellsystem 🥤",
+            category: "Was wählen Sie?",
+            extras: "Extras (z. B. Soßen, Gewürze) (optional)",
+            extrasPlaceholder: "Z. B. Knoblauchsoße, Ketchup",
+            customLocPlaceholder: "Lieferort eingeben...",
+            takeAwayLoc: "Wohin soll die Bestellung gebracht werden?",
+            vipTitle: "👑 Exklusive VIP-Optionen",
+            timeTarget: "Wann soll es fertig sein? (mind. 15 Min, alle 15 Min)",
+            nowBtn: "Jetzt ⏱️",
+            clientName: "Vor- und Nachname",
+            signature: "Unten unterschreiben (Mit dem Finger zeichnen) *erforderlich:",
+            signatureHint: "Hier unterschreiben",
+            clearSig: "Unterschrift löschen",
+            submitBtn: "Bestellung aufgeben",
+            inactTitle: "Bist du noch da?",
+            inactDesc: "Keine Aktivität. Bildschirm schließt in:",
+            btnStay: "Ja, ich bin da!",
+            btnExit: "Beenden",
+            recAccepted: "Bestellung angenommen!",
+            recSaveNum: "Bitte notieren Sie Ihre Bestellnummer:",
+            recNext: "Weiter ➔",
+            recAuto: "Automatische Weiterleitung in:",
+            thxTitle: "Vielen Dank für Ihre Bestellung!",
+            thxSub: "Ihre Bestellung wurde an die Küche gesendet.",
+            thxReturn: "Zurück zum Hauptbildschirm...",
+            foodLabel: "🍕 Was möchten Sie zu essen bestellen?",
+            foodPlaceholder: "Ihre Essensbestellung eingeben (z. B. Hamburger)...",
+            foodValPlaceholder: "Menge? (z. B. 1 oder 250)",
+            drinkLabel: "🥤 Was möchten Sie zu trinken bestellen?",
+            drinkPlaceholder: "Ihre Getränkebestellung eingeben (z. B. Orangensaft)...",
+            drinkValPlaceholder: "Menge? (z. B. 1 oder 250)",
+            snackLabel: "🍿 Welche Snacks möchten Sie bestellen?",
+            snackPlaceholder: "Ihre Snackbestellung eingeben (z. B. Gesalzene Chips)...",
+            snackValPlaceholder: "Menge? (z. B. 1 oder 250)"
+        }
+    };
+
+    function updateCategoryDropdown() {
+        const catSelect = document.getElementById('category');
+        const currentSelectedVal = catSelect.value || 'Jedzenie';
+        catSelect.innerHTML = '';
+        categoriesTranslations[currentLanguage].forEach(opt => {
+            const el = document.createElement('option');
+            el.value = opt.val;
+            el.innerText = opt.text;
+            catSelect.appendChild(el);
+        });
+        catSelect.value = currentSelectedVal;
+    }
+
+    function updateLocationDropdown() {
+        const locSelect = document.getElementById('deliveryLocation');
+        const currentSelectedVal = locSelect.value || 'Pokój';
+        locSelect.innerHTML = '';
+        locationOptionsTranslations[currentLanguage].forEach(opt => {
+            const el = document.createElement('option');
+            el.value = opt.val;
+            el.innerText = opt.text;
+            locSelect.appendChild(el);
+        });
+        locSelect.value = currentSelectedVal;
+    }
+
+    function setLanguage(lang) {
+        currentLanguage = lang;
+        document.querySelectorAll('#welcomeOverlay .lang-btn').forEach(btn => btn.classList.remove('active'));
+        if(event && event.target && event.target.classList.contains('lang-btn')) {
+            event.target.classList.add('active');
+        } else {
+            const btns = document.querySelectorAll('#welcomeOverlay .lang-btn');
+            if(lang==='pl') btns[0].classList.add('active');
+            if(lang==='en') btns[1].classList.add('active');
+            if(lang==='de') btns[2].classList.add('active');
+        }
+
+        const t = uiTranslations[lang];
+        document.getElementById('welcomeTitle').innerText = t.title;
+        document.getElementById('welcomeSubtitle').innerText = t.subtitle;
+        document.getElementById('chefLoginToggleText').innerText = t.chefToggle;
+        
+        updateWelcomeTiles();
+        updateCategoryDropdown();
+        updateLocationDropdown();
+
+        document.getElementById('lblExitTop').innerText = t.exitTop;
+        document.getElementById('mainTitle').innerText = t.mainTitle;
+        document.getElementById('lblCategory').innerText = t.category;
+        document.getElementById('lblExtras').innerText = t.extras;
+        document.getElementById('extras').placeholder = t.extrasPlaceholder;
+        document.getElementById('customLocationInput').placeholder = t.customLocPlaceholder;
+        document.getElementById('lblVipTitle').innerText = t.vipTitle;
+        document.getElementById('lblTimeTarget').innerHTML = `${t.timeTarget.split('(')[0]} <span class="optional-text">(min. 15 min)</span>`;
+        document.getElementById('btnNowText').innerText = t.nowBtn;
+        document.getElementById('lblClientName').innerText = t.clientName;
+        document.getElementById('lblSignature').innerText = t.signature;
+        document.getElementById('lblSignatureHint').innerText = t.signatureHint;
+        document.getElementById('btnClearSignature').innerText = t.clearSig;
+        document.getElementById('submitBtn').innerText = t.submitBtn;
+
+        if (selectedWelcomeType) {
+            const labels = getCustomLabels()[currentLanguage];
+            document.getElementById('deliveryType').value = selectedWelcomeType === 'onSite' ? labels.onSite : labels.takeAway;
+        }
+
+        document.getElementById('inactivityTitle').innerText = t.inactTitle;
+        document.getElementById('inactivityDesc').innerText = t.inactDesc;
+        document.getElementById('btnStayHere').innerText = t.btnStay;
+        document.getElementById('btnExitNow').innerText = t.btnExit;
+
+        document.getElementById('receiptAcceptedTitle').innerText = t.recAccepted;
+        document.getElementById('receiptSaveNumText').innerText = t.recSaveNum;
+        document.getElementById('receiptNextBtn').innerText = t.recNext;
+        document.getElementById('receiptAutoText').innerText = t.recAuto;
+
+        document.getElementById('thankYouTitle').innerText = t.thxTitle;
+        document.getElementById('thankYouSub').innerText = t.thxSub;
+        document.getElementById('thankYouReturn').innerText = t.thxReturn;
+
+        updateDynamicFields();
+        renderCustomTimeSlots();
+    }
+
+    function setChefLanguage(lang) {
+        currentChefLanguage = lang;
+        document.getElementById('chefLangPl').classList.remove('active');
+        document.getElementById('chefLangEn').classList.remove('active');
+        document.getElementById('chefLangDe').classList.remove('active');
+        
+        if(lang === 'pl') document.getElementById('chefLangPl').classList.add('active');
+        if(lang === 'en') document.getElementById('chefLangEn').classList.add('active');
+        if(lang === 'de') document.getElementById('chefLangDe').classList.add('active');
+
+        renderReservations();
+    }
+
+    function checkMainDeliveryTypeVisibility() {
+        const labels = getCustomLabels()[currentLanguage];
+        const currentVal = document.getElementById('deliveryType').value;
+        const locGroup = document.getElementById('locationGroup');
+        const lblLoc = document.getElementById('lblDeliveryLoc');
+        const deliveryLocSelect = document.getElementById('deliveryLocation');
+        const customLocInput = document.getElementById('customLocationInput');
+        const t = uiTranslations[currentLanguage];
+
+        if (currentVal === labels.onSite) {
+            locGroup.style.display = 'none';
+            deliveryLocSelect.required = false;
+            customLocInput.required = false;
+        } else {
+            locGroup.style.display = 'block';
+            lblLoc.innerText = t.takeAwayLoc;
+            deliveryLocSelect.required = true;
+        }
+    }
+
+    // --- SYSTEM BEZCZYNNOŚCI ---
+    let idleTimer = null;
+    let inactivityCountdownTimer = null;
+
+    function resetIdleTimer() {
+        if(document.getElementById('welcomeOverlay').style.display !== 'none') return;
+        if(document.getElementById('orderSuccessOverlay').style.display === 'flex') return;
+        if(document.getElementById('thankYouOverlay').style.display === 'flex') return;
+
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(showInactivityPopup, 30000);
+    }
+
+    function showInactivityPopup() {
+        if(document.getElementById('welcomeOverlay').style.display !== 'none') return;
+
+        document.getElementById('inactivityOverlay').style.display = 'flex';
+        let sec = 10;
+        document.getElementById('inactivitySecDisplay').innerText = sec;
+
+        if (inactivityCountdownTimer) clearInterval(inactivityCountdownTimer);
+        inactivityCountdownTimer = setInterval(() => {
+            sec--;
+            document.getElementById('inactivitySecDisplay').innerText = sec;
+            if(sec <= 0) {
+                clearInterval(inactivityCountdownTimer);
+                returnToWelcomeScreen();
+            }
+        }, 1000);
+    }
+
+    function keepSessionAlive() {
+        clearInterval(inactivityCountdownTimer);
+        document.getElementById('inactivityOverlay').style.display = 'none';
+        resetIdleTimer();
+    }
+
+    ['mousemove', 'mousedown', 'touchstart', 'keydown', 'scroll'].forEach(evt => {
+        window.addEventListener(evt, resetIdleTimer, true);
+    });
+
+    function returnToWelcomeScreen() {
+        clearInterval(inactivityCountdownTimer);
+        if(receiptTimer) clearInterval(receiptTimer);
+        if(countdownTimer) clearInterval(countdownTimer);
+        clearTimeout(idleTimer);
+
+        document.getElementById('inactivityOverlay').style.display = 'none';
+        document.getElementById('orderSuccessOverlay').style.display = 'none';
+        document.getElementById('thankYouOverlay').style.display = 'none';
+
+        // KOMPLETNE CZYSZCZENIE DANYCH FORMULARZA
+        document.getElementById('reservationForm').reset();
+        isVipUnlocked = false;
+        clearSignature();
+        clearGrids();
+        selectedWelcomeType = '';
+        isNowSelected = false;
+        document.getElementById('btnNowText').classList.remove('active-now');
+        selectedDateTimeValue = "";
+        document.getElementById('timeTarget').value = "";
+
+        document.getElementById('tileOnSite').classList.remove('selected');
+        document.getElementById('tileTakeAway').classList.remove('selected');
+        document.getElementById('startBtnText').disabled = true;
+        updateWelcomeTiles();
+        handleCategoryChange();
+        initCustomDatePicker();
+
+        document.getElementById('welcomeOverlay').style.display = 'flex';
+    }
+
+    // --- SELEKTOR CZASU I DATY ---
+    let selectedDateTimeValue = "";
+
+    function initCustomDatePicker() {
+        const dateInput = document.getElementById('customDateInput');
+        const now = new Date();
+        
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        
+        dateInput.value = `${year}-${month}-${day}`;
+        dateInput.min = `${year}-${month}-${day}`;
+        
+        renderCustomTimeSlots();
+    }
+
+    function renderCustomTimeSlots() {
+        const dateInputVal = document.getElementById('customDateInput').value;
+        const container = document.getElementById('customTimeSlotsContainer');
+        container.innerHTML = '';
+
+        if (!dateInputVal) return;
+
+        const now = new Date();
+        const selectedDate = new Date(dateInputVal);
+        const isToday = selectedDate.toDateString() === now.toDateString();
+
+        const minTimeThreshold = new Date(now.getTime() + 15 * 60 * 1000);
+        
+        let slots = [];
+        for (let h = 0; h < 24; h++) {
+            for (let m = 0; m < 60; m += 15) {
+                let slotDate = new Date(selectedDate);
+                slotDate.setHours(h, m, 0, 0);
+                slots.push(slotDate);
+            }
+        }
+
+        let closestPassedSlot = null;
+        if (isToday) {
+            for (let i = slots.length - 1; i >= 0; i--) {
+                if (slots[i] < minTimeThreshold) {
+                    closestPassedSlot = slots[i];
+                    break;
+                }
+            }
+        }
+
+        slots.forEach(slot => {
+            const timeStr = String(slot.getHours()).padStart(2, '0') + ':' + String(slot.getMinutes()).padStart(2, '0');
+            const fullIsoStr = dateInputVal + 'T' + timeStr;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.style.width = '100%';
+            btn.style.padding = '8px';
+            btn.style.borderRadius = '5px';
+            btn.style.fontSize = '14px';
+            btn.style.textAlign = 'left';
+            btn.style.cursor = 'pointer';
+            btn.style.border = '1px solid #ddd';
+
+            if (isToday && closestPassedSlot && slot.getTime() === closestPassedSlot.getTime()) {
+                btn.innerText = `🔒 ${timeStr} (${currentLanguage === 'en' ? 'passed / unavailable' : (currentLanguage === 'de' ? 'vorbei / nicht verfügbar' : 'minęło / niedostępne')})`;
+                btn.style.background = '#f1f2f6';
+                btn.style.color = '#a4b0be';
+                btn.style.cursor = 'not-allowed';
+                btn.disabled = true;
+                container.appendChild(btn);
+            } else if (isToday && slot < minTimeThreshold) {
+                return;
+            } else {
+                btn.innerText = `🕒 ${timeStr}`;
+                
+                if (!isNowSelected && selectedDateTimeValue === fullIsoStr) {
+                    btn.style.background = 'var(--accent-color)';
+                    btn.style.color = '#fff';
+                    btn.style.fontWeight = 'bold';
+                } else {
+                    btn.style.background = '#ffffff';
+                    btn.style.color = '#333';
+                    btn.style.fontWeight = 'normal';
+                }
+
+                btn.onmouseover = function() {
+                    if (isNowSelected || selectedDateTimeValue !== fullIsoStr) btn.style.background = '#f8f9fa';
+                };
+                btn.onmouseout = function() {
+                    if (!isNowSelected && selectedDateTimeValue === fullIsoStr) {
+                        btn.style.background = 'var(--accent-color)';
+                    } else {
+                        btn.style.background = '#ffffff';
+                    }
+                };
+
+                btn.onclick = function() {
+                    isNowSelected = false;
+                    document.getElementById('btnNowText').classList.remove('active-now');
+
+                    document.querySelectorAll('#customTimeSlotsContainer button').forEach(b => {
+                        if (!b.disabled) {
+                            b.style.background = '#ffffff';
+                            b.style.color = '#333';
+                            b.style.fontWeight = 'normal';
+                        }
+                    });
+                    btn.style.background = 'var(--accent-color)';
+                    btn.style.color = '#fff';
+                    btn.style.fontWeight = 'bold';
+                    selectedDateTimeValue = fullIsoStr;
+                    document.getElementById('timeTarget').value = fullIsoStr;
+                };
+
+                container.appendChild(btn);
+            }
+        });
+    }
+
+    function selectNowTime() {
+        isNowSelected = true;
+        document.getElementById('btnNowText').classList.add('active-now');
+        
+        document.querySelectorAll('#customTimeSlotsContainer button').forEach(b => {
+            if (!b.disabled) {
+                b.style.background = '#ffffff';
+                b.style.color = '#333';
+                b.style.fontWeight = 'normal';
+            }
+        });
+
+        selectedDateTimeValue = "NOW";
+        document.getElementById('timeTarget').value = "NOW";
+    }
+
+    function closeWelcome() {
+        if (!selectedWelcomeType) return;
+        initCustomDatePicker();
+        checkMainDeliveryTypeVisibility();
+
+        const overlay = document.getElementById('welcomeOverlay');
+        overlay.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+        overlay.style.opacity = '0';
+        overlay.style.transform = 'scale(1.05)';
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            overlay.style.opacity = '1';
+            overlay.style.transform = 'scale(1)';
+            resetIdleTimer();
+        }, 400);
+    }
+
+    function quickChefLogin() {
+        const entered = document.getElementById('startChefPass').value;
+        const current = localStorage.getItem('chefPassword');
+        if (entered === current) {
+            if (!selectedWelcomeType) selectWelcomeType('onSite');
+            closeWelcome();
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('chefContent').style.display = 'block';
+            loadConfigInputs();
+            autoCleanOldReservations(); 
+            renderReservations();
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        } else {
+            alert('Błędne hasło kucharza!');
+        }
+    }
+
+    let receiptTimer = null;
+    let countdownTimer = null;
+
+    function startReceiptAutoTimer() {
+        let secLeft = 10;
+        document.getElementById('receiptAutoNextSec').innerText = secLeft;
+        if (receiptTimer) clearInterval(receiptTimer);
+
+        receiptTimer = setInterval(() => {
+            secLeft--;
+            document.getElementById('receiptAutoNextSec').innerText = secLeft;
+            if (secLeft <= 0) {
+                clearInterval(receiptTimer);
+                proceedToThankYou();
+            }
+        }, 1000);
+    }
+
+    function proceedToThankYou() {
+        if (receiptTimer) clearInterval(receiptTimer);
+        document.getElementById('orderSuccessOverlay').style.display = 'none';
+        document.getElementById('thankYouOverlay').style.display = 'flex';
+        
+        let secondsLeft = 5;
+        document.getElementById('countdownDisplay').innerText = secondsLeft;
+
+        if (countdownTimer) clearInterval(countdownTimer);
+        
+        countdownTimer = setInterval(() => {
+            secondsLeft--;
+            document.getElementById('countdownDisplay').innerText = secondsLeft;
+            if (secondsLeft <= 0) {
+                clearInterval(countdownTimer);
+                returnToWelcomeScreen();
+            }
+        }, 1000);
+    }
+
+    if (!localStorage.getItem('chefPassword')) localStorage.setItem('chefPassword', '7987');
+    if (!localStorage.getItem('vipPassword')) localStorage.setItem('vipPassword', '9999'); 
+    if (!localStorage.getItem('reservations')) localStorage.setItem('reservations', JSON.stringify([]));
+    if (!localStorage.getItem('orderCounter')) localStorage.setItem('orderCounter', '101');
+
+    let reservations = JSON.parse(localStorage.getItem('reservations'));
+    let editingId = null; 
+    let isVipUnlocked = false; 
+
+    const knownLocations = [
+        'Pokój', 'Salon', 'Jadalnia', 'Kuchnia', 'Sypialnia', 
+        'Pokój dziecięcy', 'Biurko / Pokój do pracy', 'Balkon', 
+        'Taras', 'Ogród / Podwórko', 'Garaż / Warsztat', 
+        'Przed drzwi pokoju', 'Do łóżka'
+    ];
+
+    function getUnitOptionsHTML(type, lang) {
+        if (type === 'food' || type === 'snacks') {
+            if (lang === 'de') {
+                return `
+                    <option value="🍽️ porcja">🍽️ Portion / Portionen</option>
+                    <option value="🍰 kawałek">🍰 Stück / Stücke</option>
+                    <option value="📦 sztuka">📦 Einzelstück / Einzelstücke</option>
+                    <option value="🍃 listek">🍃 Blatt / Blätter</option>
+                    <option value="⚖️ g">⚖️ Gramm (g)</option>
+                `;
+            } else if (lang === 'en') {
+                return `
+                    <option value="🍽️ porcja">🍽️ Portion / Portions</option>
+                    <option value="🍰 kawałek">🍰 Piece / Pieces</option>
+                    <option value="📦 sztuka">📦 Item / Items</option>
+                    <option value="🍃 listek">🍃 Leaf / Leaves</option>
+                    <option value="⚖️ g">⚖️ Grams (g)</option>
+                `;
+            } else {
+                return `
+                    <option value="🍽️ porcja">🍽️ Porcja / Porcje</option>
+                    <option value="🍰 kawałek">🍰 Kawałek / Kawałki</option>
+                    <option value="📦 sztuka">📦 Sztuka / Sztuki</option>
+                    <option value="🍃 listek">🍃 Listek / Listki</option>
+                    <option value="⚖️ g">⚖️ Gramy (g)</option>
+                `;
+            }
+        } else {
+            if (lang === 'de') {
+                return `
+                    <option value="🥛 szklanka">🥛 Glas / Gläser</option>
+                    <option value="☕ duży kubek">☕ Großer Becher / Becher</option>
+                    <option value="🍵 mały kubek / filiżanka">🍵 Kleine Tasse / Tassen</option>
+                    <option value="🍾 butelka">🍾 Flasche / Flaschen</option>
+                    <option value="💧 ml">💧 Milliliter (ml)</option>
+                `;
+            } else if (lang === 'en') {
+                return `
+                    <option value="🥛 szklanka">🥛 Glass / Glasses</option>
+                    <option value="☕ duży kubek">☕ Large Mug / Mugs</option>
+                    <option value="🍵 mały kubek / filiżanka">🍵 Cup / Cups</option>
+                    <option value="🍾 butelka">🍾 Bottle / Bottles</option>
+                    <option value="💧 ml">💧 Milliliters (ml)</option>
+                `;
+            } else {
+                return `
+                    <option value="🥛 szklanka">🥛 Szklanka / Szklanki</option>
+                    <option value="☕ duży kubek">☕ Duży kubek / Kubki</option>
+                    <option value="🍵 mały kubek / filiżanka">🍵 Mały kubek / Filiżanka</option>
+                    <option value="🍾 butelka">🍾 Butelka / Butelki</option>
+                    <option value="💧 ml">💧 Mililitry (ml)</option>
+                `;
+            }
+        }
+    }
+
+    // --- CANVAS PODPIS ---
+    const canvas = document.getElementById('signaturePad');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let lastX = 0; let lastY = 0;
+    let isCanvasBlank = true; 
+
+    function resizeCanvas() {
+        let tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        let tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(canvas, 0, 0);
+
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = 160;
+        
+        ctx.strokeStyle = "#2c3e50";
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        if (!isCanvasBlank) {
+            ctx.drawImage(tempCanvas, 0, 0);
+            const hint = document.querySelector('.signature-hint');
+            if(hint) hint.style.opacity = '0';
+        }
+    }
+    window.addEventListener('resize', resizeCanvas);
+    setTimeout(resizeCanvas, 100);
+
+    function getEventPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        if (e.touches && e.touches.length > 0) {
+            return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+        } else {
+            return { x: e.offsetX !== undefined ? e.offsetX : e.clientX - rect.left, y: e.offsetY !== undefined ? e.offsetY : e.clientY - rect.top };
+        }
+    }
+
+    function startDrawing(e) {
+        isDrawing = true;
+        isCanvasBlank = false; 
+        const pos = getEventPos(e);
+        lastX = pos.x; lastY = pos.y;
+        const hint = document.querySelector('.signature-hint');
+        if(hint) hint.style.opacity = '0';
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fill();
+    }
+
+    function draw(e) {
+        if (!isDrawing) return;
+        const pos = getEventPos(e);
+        ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(pos.x, pos.y); ctx.stroke();
+        lastX = pos.x; lastY = pos.y;
+    }
+
+    function stopDrawing() { isDrawing = false; }
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    window.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('touchstart', startDrawing);
+    canvas.addEventListener('touchmove', draw);
+    window.addEventListener('touchend', stopDrawing);
+
+    function clearSignature() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        isCanvasBlank = true; 
+        const hint = document.querySelector('.signature-hint');
+        if(hint) hint.style.opacity = '1';
+    }
+
+    function handleLocationChange() {
+        const select = document.getElementById('deliveryLocation');
+        const customInput = document.getElementById('customLocationInput');
+        if (select.value === 'Inne') {
+            customInput.style.display = 'block';
+            customInput.required = true;
+        } else {
+            customInput.style.display = 'none';
+            customInput.required = false;
+            customInput.value = '';
+        }
+    }
+
+    function getSelectedLocation() {
+        const labels = getCustomLabels()[currentLanguage];
+        const deliveryType = document.getElementById('deliveryType').value;
+        if (deliveryType === labels.onSite) return labels.onSite;
+        
+        const select = document.getElementById('deliveryLocation');
+        if (select.value === 'Inne') return document.getElementById('customLocationInput').value;
+        return select.value;
+    }
+
+    function setSelectedLocation(value, deliveryType) {
+        const select = document.getElementById('deliveryLocation');
+        const customInput = document.getElementById('customLocationInput');
+        const labels = getCustomLabels()[currentLanguage];
+
+        if (deliveryType === labels.onSite) {
+            select.value = 'Pokój';
+            customInput.style.display = 'none';
+            customInput.value = '';
+            return;
+        }
+
+        if (knownLocations.includes(value)) {
+            select.value = value;
+            customInput.style.display = 'none';
+            customInput.value = '';
+        } else if (value && value !== labels.onSite) {
+            select.value = 'Inne';
+            customInput.style.display = 'block';
+            customInput.value = value;
+        }
+    }
+
+    function setupGridSelection(gridId) {
+        const container = document.getElementById(gridId);
+        const options = container.getElementsByClassName('vip-option');
+        for (let option of options) {
+            option.addEventListener('click', function() {
+                const selectedOptions = container.querySelectorAll('.vip-option.selected');
+                if (this.classList.contains('selected')) {
+                    this.classList.remove('selected');
+                } else {
+                    if (selectedOptions.length >= 2) {
+                        alert("Możesz wybrać maksymalnie 2 opcje z tej sekcji!");
+                    } else {
+                        this.classList.add('selected');
+                    }
+                }
+            });
+        }
+    }
+    setupGridSelection('gridExtras');
+    setupGridSelection('gridServing');
+
+    function getGridValues(gridId) {
+        const container = document.getElementById(gridId);
+        const selected = container.querySelectorAll('.vip-option.selected');
+        const values = [];
+        selected.forEach(el => values.push(el.getAttribute('data-value')));
+        return values.length > 0 ? values.join(' + ') : 'Brak';
+    }
+
+    function setGridValues(gridId, sharedString) {
+        const container = document.getElementById(gridId);
+        const options = container.getElementsByClassName('vip-option');
+        if (!sharedString) return;
+        const valuesArray = sharedString.split(' + ');
+        for (let option of options) {
+            if (valuesArray.includes(option.getAttribute('data-value'))) {
+                option.classList.add('selected');
+            } else {
+                option.classList.remove('selected');
+            }
+        }
+    }
+
+    function clearGrids() {
+        document.querySelectorAll('.vip-option').forEach(el => el.classList.remove('selected'));
+    }
+
+    function updateDynamicFields() {
+        const category = document.getElementById('category').value;
+        const container = document.getElementById('dynamicFieldsContainer');
+        const t = uiTranslations[currentLanguage];
+        
+        const oldFood = document.getElementById('order_food') ? document.getElementById('order_food').value : '';
+        const oldFoodVal = document.getElementById('order_food_val') ? document.getElementById('order_food_val').value : '';
+        const oldFoodUnit = document.getElementById('order_food_unit') ? document.getElementById('order_food_unit').value : '🍽️ porcja';
+
+        const oldDrinks = document.getElementById('order_drinks') ? document.getElementById('order_drinks').value : '';
+        const oldDrinksVal = document.getElementById('order_drinks_val') ? document.getElementById('order_drinks_val').value : '';
+        const oldDrinksUnit = document.getElementById('order_drinks_unit') ? document.getElementById('order_drinks_unit').value : '🥛 szklanka';
+
+        const oldSnacks = document.getElementById('order_snacks') ? document.getElementById('order_snacks').value : '';
+        const oldSnacksVal = document.getElementById('order_snacks_val') ? document.getElementById('order_snacks_val').value : '';
+        const oldSnacksUnit = document.getElementById('order_snacks_unit') ? document.getElementById('order_snacks_unit').value : '📦 sztuka';
+
+        container.innerHTML = '';
+        let configs = [];
+
+        const needFood = ['Jedzenie', 'Jedzenie i Picie', 'Jedzenie i Przekąski', 'Wszystko (Jedzenie, Picie i Przekąski)', 'VIP'].includes(category);
+        const needDrinks = ['Picie', 'Jedzenie i Picie', 'Picie i Przekąski', 'Wszystko (Jedzenie, Picie i Przekąski)', 'VIP'].includes(category);
+        const needSnacks = ['Przekąski', 'Jedzenie i Przekąski', 'Picie i Przekąski', 'Wszystko (Jedzenie, Picie i Przekąski)', 'VIP'].includes(category);
+
+        if (needFood) {
+            configs.push({
+                id: 'order_food',
+                label: category === 'VIP' ? `${t.foodLabel} <span class="optional-text">(opcjonalne)</span>:` : t.foodLabel,
+                placeholder: t.foodPlaceholder,
+                valPlaceholder: t.foodValPlaceholder,
+                required: category !== 'VIP',
+                units: getUnitOptionsHTML('food', currentLanguage),
+                savedText: oldFood, savedVal: oldFoodVal, savedUnit: oldFoodUnit
+            });
+        }
+        if (needDrinks) {
+            configs.push({
+                id: 'order_drinks',
+                label: category === 'VIP' ? `${t.drinkLabel} <span class="optional-text">(opcjonalne)</span>:` : t.drinkLabel,
+                placeholder: t.drinkPlaceholder,
+                valPlaceholder: t.drinkValPlaceholder,
+                required: category !== 'VIP',
+                units: getUnitOptionsHTML('drinks', currentLanguage),
+                savedText: oldDrinks, savedVal: oldDrinksVal, savedUnit: oldDrinksUnit
+            });
+        }
+        if (needSnacks) {
+            configs.push({
+                id: 'order_snacks',
+                label: category === 'VIP' ? `${t.snackLabel} <span class="optional-text">(opcjonalne)</span>:` : t.snackLabel,
+                placeholder: t.snackPlaceholder,
+                valPlaceholder: t.snackValPlaceholder,
+                required: category !== 'VIP',
+                units: getUnitOptionsHTML('snacks', currentLanguage),
+                savedText: oldSnacks, savedVal: oldSnacksVal, savedUnit: oldSnacksUnit
+            });
+        }
+
+        configs.forEach(conf => {
+            const div = document.createElement('div');
+            div.className = 'sub-field';
+            div.innerHTML = `
+                <label for="${conf.id}">${conf.label}</label>
+                <textarea id="${conf.id}" rows="2" placeholder="${conf.placeholder}" ${conf.required ? 'required' : ''}>${conf.savedText || ''}</textarea>
+                
+                <div class="amount-group">
+                    <select id="${conf.id}_unit">
+                        ${conf.units}
+                    </select>
+                    <input type="text" id="${conf.id}_val" placeholder="${conf.valPlaceholder}" value="${conf.savedVal || ''}" ${conf.required ? 'required' : ''}>
+                </div>
+            `;
+            container.appendChild(div);
+            const selectEl = document.getElementById(`${conf.id}_unit`);
+            if (selectEl && selectEl.querySelector(`option[value="${conf.savedUnit}"]`)) {
+                selectEl.value = conf.savedUnit;
+            }
+        });
+    }
+
+    function handleCategoryChange() {
+        const category = document.getElementById('category').value;
+        const vipBox = document.getElementById('vipUnlockBox');
+        const vipFields = document.getElementById('vipSpecialFields');
+
+        updateDynamicFields();
+
+        if (category === 'VIP') {
+            if (!isVipUnlocked) {
+                vipBox.style.display = 'block';
+                vipFields.style.display = 'none';
+                document.getElementById('submitBtn').disabled = true;
+                document.getElementById('submitBtn').style.opacity = "0.5";
+            } else {
+                vipBox.style.display = 'none';
+                vipFields.style.display = 'block';
+            }
+            document.getElementById('submitBtn').className = "btn-vip";
+        } else {
+            vipBox.style.display = 'none';
+            vipFields.style.display = 'none';
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').style.opacity = "1";
+            document.getElementById('submitBtn').className = "btn-primary";
+        }
+    }
+
+    function verifyVipPassword() {
+        const entered = document.getElementById('vipInputPassword').value;
+        const correct = localStorage.getItem('vipPassword');
+        if (entered === correct) {
+            isVipUnlocked = true;
+            document.getElementById('vipUnlockBox').style.display = 'none';
+            document.getElementById('vipSpecialFields').style.display = 'block';
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').style.opacity = "1";
+            alert('Strefa VIP odblokowana!');
+        } else {
+            alert('Niepoprawne hasło VIP!');
+        }
+    }
+
+    function formatDate(dateString) {
+        if (!dateString || dateString.trim() === "") return '-';
+        if (dateString === "NOW") return translateTerm('teraz', currentChefLanguage);
+        const options = { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+        return new Date(dateString).toLocaleDateString('pl-PL', options);
+    }
+
+    function autoCleanOldReservations() {
+        const now = new Date().getTime();
+        let currentReservations = JSON.parse(localStorage.getItem('reservations')) || [];
+        let updatedReservations = currentReservations.filter(res => {
+            if (!res.timeTarget || res.timeTarget === "NOW") return true; 
+            const targetTime = new Date(res.timeTarget).getTime();
+            const fiveMinutes = 5 * 60 * 1000; 
+            return now <= (targetTime + fiveMinutes);
+        });
+
+        if (currentReservations.length !== updatedReservations.length) {
+            reservations = updatedReservations;
+            localStorage.setItem('reservations', JSON.stringify(reservations));
+            if (document.getElementById('chefContent').style.display === 'block') {
+                renderReservations();
+            }
+        }
+    }
+    setInterval(autoCleanOldReservations, 60000);
+
+    document.getElementById('reservationForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const category = document.getElementById('category').value;
+
+        if (isCanvasBlank) {
+            alert('Błąd: Musisz złożyć podpis palcem, aby zatwierdzić zamówienie!');
+            return; 
+        }
+
+        const timeTargetInput = document.getElementById('timeTarget').value;
+        if (!timeTargetInput) {
+            alert('Błąd: Wybierz godzinę realizacji zamówienia!');
+            return;
+        }
+
+        const foodText = document.getElementById('order_food') ? document.getElementById('order_food').value.trim() : '';
+        const foodVal = document.getElementById('order_food_val') ? document.getElementById('order_food_val').value.trim() : '';
+        const foodUnit = document.getElementById('order_food_unit') ? document.getElementById('order_food_unit').value : '';
+
+        const drinksText = document.getElementById('order_drinks') ? document.getElementById('order_drinks').value.trim() : '';
+        const drinksVal = document.getElementById('order_drinks_val') ? document.getElementById('order_drinks_val').value.trim() : '';
+        const drinksUnit = document.getElementById('order_drinks_unit') ? document.getElementById('order_drinks_unit').value : '';
+
+        const snacksText = document.getElementById('order_snacks') ? document.getElementById('order_snacks').value.trim() : '';
+        const snacksVal = document.getElementById('order_snacks_val') ? document.getElementById('order_snacks_val').value.trim() : '';
+        const snacksUnit = document.getElementById('order_snacks_unit') ? document.getElementById('order_snacks_unit').value : '';
+
+        if (category === 'VIP' && foodText === '' && drinksText === '' && snacksText === '') {
+            alert('Błąd: Jako użytkownik VIP musisz wypełnić przynajmniej jedno pole zamówienia!');
+            return;
+        }
+
+        const structuredOrder = {};
+        if (foodText) structuredOrder.food = { text: foodText, amount: `${foodVal} ${foodUnit}` };
+        if (drinksText) structuredOrder.drinks = { text: drinksText, amount: `${drinksVal} ${drinksUnit}` };
+        if (snacksText) structuredOrder.snacks = { text: snacksText, amount: `${snacksVal} ${snacksUnit}` };
+
+        let currentOrderNum = parseInt(localStorage.getItem('orderCounter')) || 101;
+        let orderCode = "#" + currentOrderNum;
+        localStorage.setItem('orderCounter', currentOrderNum + 1);
+
+        const labels = getCustomLabels()[currentLanguage];
+        const deliveryTypeVal = document.getElementById('deliveryType').value;
+
+        const reservationData = {
+            id: editingId ? editingId : Date.now(),
+            orderNumber: orderCode,
+            category: category,
+            orderContent: JSON.stringify(structuredOrder),
+            extras: document.getElementById('extras').value,
+            deliveryType: deliveryTypeVal,
+            location: getSelectedLocation(),
+            vipPremiumExtras: category === 'VIP' ? getGridValues('gridExtras') : 'Brak',
+            vipServing: category === 'VIP' ? getGridValues('gridServing') : 'Standardowe',
+            timeTarget: timeTargetInput,
+            clientName: document.getElementById('clientName').value,
+            signature: canvas.toDataURL() 
+        };
+
+        if (editingId) {
+            const existing = reservations.find(r => r.id === editingId);
+            if(existing && existing.orderNumber) reservationData.orderNumber = existing.orderNumber;
+
+            reservations = reservations.map(res => res.id === editingId ? reservationData : res);
+            editingId = null;
+            document.getElementById('submitBtn').innerText = uiTranslations[currentLanguage].submitBtn;
+            renderReservations();
+            alert('Zmiany w zamówieniu zostały zapisane.');
+            return;
+        } else {
+            reservations.push(reservationData);
+        }
+
+        localStorage.setItem('reservations', JSON.stringify(reservations));
+        
+        document.getElementById('receiptOrderNum').innerText = orderCode;
+        
+        let summaryHTML = `<b>${translateTerm('klient', currentLanguage)}:</b> ${reservationData.clientName}<br>`;
+        summaryHTML += `📦 ${translateTerm('typ dostawy', currentLanguage)}: ${translateTerm(reservationData.deliveryType, currentLanguage)}<br>`;
+        if(foodText) summaryHTML += `🍕 ${translateTerm('jedzenie', currentLanguage)}: ${foodText} (${foodVal} ${foodUnit})<br>`;
+        if(drinksText) summaryHTML += `🥤 ${translateTerm('picie', currentLanguage)}: ${drinksText} (${drinksVal} ${drinksUnit})<br>`;
+        if(snacksText) summaryHTML += `🍿 ${translateTerm('przekąski', currentLanguage)}: ${snacksText} (${snacksVal} ${snacksUnit})<br>`;
+        if(reservationData.deliveryType !== labels.onSite) {
+            summaryHTML += `📍 ${translateTerm('miejsce dostawy', currentLanguage)}: ${translateTerm(reservationData.location, currentLanguage)}<br>`;
+        }
+        
+        let timeDisplay = reservationData.timeTarget === "NOW" ? translateTerm('teraz', currentLanguage) : formatDate(reservationData.timeTarget);
+        summaryHTML += `🕒 Czas: ${timeDisplay}`;
+        
+        document.getElementById('receiptSummaryContent').innerHTML = summaryHTML;
+        document.getElementById('orderSuccessOverlay').style.display = 'flex';
+        
+        startReceiptAutoTimer();
+        renderReservations();
+    });
+
+    function checkPassword() {
+        const entered = document.getElementById('chefPassword').value;
+        const current = localStorage.getItem('chefPassword');
+        if (entered === current) {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('chefContent').style.display = 'block';
+            loadConfigInputs();
+            autoCleanOldReservations(); 
+            renderReservations();
+        } else {
+            alert('Błędne hasło kucharza!');
+        }
+    }
+
+    function logoutChef() {
+        document.getElementById('chefPassword').value = '';
+        document.getElementById('loginForm').style.display = 'block';
+        document.getElementById('chefContent').style.display = 'none';
+    }
+
+    function changePassword(localStorageKey, inputFieldId) {
+        const newPass = document.getElementById(inputFieldId).value;
+        if (newPass.trim() !== "") {
+            localStorage.setItem(localStorageKey, newPass);
+            alert('Hasło zmienione!');
+            document.getElementById(inputFieldId).value = '';
+        } else {
+            alert('Hasło nie może być puste!');
+        }
+    }
+
+    function renderReservations() {
+        const listContainer = document.getElementById('reservationsList');
+        listContainer.innerHTML = '';
+
+        if (reservations.length === 0) {
+            listContainer.innerHTML = `<p style="text-align:center; font-size:12px; color:#777;">Brak zamówień.</p>`;
+            return;
+        }
+
+        reservations.sort((a, b) => {
+            if (a.timeTarget === "NOW") return -1;
+            if (b.timeTarget === "NOW") return 1;
+            return new Date(a.timeTarget) - new Date(b.timeTarget);
+        });
+
+        reservations.forEach(res => {
+            const card = document.createElement('div');
+            const isVip = res.category === 'VIP';
+            card.className = `reservation-card ${isVip ? 'vip-card' : ''}`;
+            
+            const orderNumBadge = res.orderNumber ? `<span style="background:var(--accent-color); color:white; padding:2px 6px; border-radius:4px; font-weight:bold; margin-right:5px;">${res.orderNumber}</span>` : '';
+            const labelCategory = isVip ? `<span class="badge-vip">⭐ VIP</span>` : `<b>${translateTerm(res.category, currentChefLanguage)}</b>`;
+            const extrasText = res.extras && res.extras.trim() !== "" ? res.extras : translateTerm('brak', currentChefLanguage);
+            const deliveryTypeText = res.deliveryType ? translateTerm(res.deliveryType, currentChefLanguage) : getCustomLabels()[currentChefLanguage].onSite;
+            const locationText = res.location ? translateTerm(res.location, currentChefLanguage) : translateTerm('nie podano', currentChefLanguage);
+
+            let itemsHtml = '';
+            try {
+                const orderData = JSON.parse(res.orderContent);
+                if (orderData.food) {
+                    itemsHtml += `<div class="chef-order-item">🍕 <b>${translateTerm('jedzenie', currentChefLanguage)}:</b> ${orderData.food.text} <br> ⚖️ ${translateTerm('ilość', currentChefLanguage)}: <b>${orderData.food.amount}</b></div>`;
+                }
+                if (orderData.drinks) {
+                    itemsHtml += `<div class="chef-order-item">🥤 <b>${translateTerm('picie', currentChefLanguage)}:</b> ${orderData.drinks.text} <br> ⚖️ ${translateTerm('ilość', currentChefLanguage)}: <b>${orderData.drinks.amount}</b></div>`;
+                }
+                if (orderData.snacks) {
+                    itemsHtml += `<div class="chef-order-item">🍿 <b>${translateTerm('przekąski', currentChefLanguage)}:</b> ${orderData.snacks.text} <br> ⚖️ ${translateTerm('ilość', currentChefLanguage)}: <b>${orderData.snacks.amount}</b></div>`;
+                }
+            } catch(e) {
+                itemsHtml = `<div class="chef-order-item">${res.orderContent}</div>`;
+            }
+
+            let vipDetailsHtml = '';
+            if (isVip) {
+                vipDetailsHtml = `
+                    <div class="mini-vip-details">
+                        <b>${translateTerm('życzenia', currentChefLanguage)}:</b> ${res.vipPremiumExtras}<br>
+                        <b>${translateTerm('podanie', currentChefLanguage)}:</b> ${res.vipServing}
+                    </div>
+                `;
+            }
+
+            const currentOnSiteVal = getCustomLabels()[currentChefLanguage].onSite;
+            let locationHtmlSnippet = '';
+            if (res.deliveryType !== currentOnSiteVal) {
+                locationHtmlSnippet = `<div style="margin-bottom: 2px;">📍 <b>${translateTerm('miejsce dostawy', currentChefLanguage)}:</b> <span style="color: #2980b9; font-weight: bold;">${locationText}</span></div>`;
+            }
+
+            let signatureHtml = '<em>brak podpisu</em>';
+            if (res.signature && res.signature.startsWith('data:image')) {
+                signatureHtml = `<img src="${res.signature}" class="chef-signature-img" alt="Podpis klienta">`;
+            }
+
+            let chefTimeDisplay = res.timeTarget === "NOW" ? translateTerm('teraz', currentChefLanguage) : formatDate(res.timeTarget);
+
+            card.innerHTML = `
+                <div>${orderNumBadge} ${labelCategory} | <b>${translateTerm('klient', currentChefLanguage)}:</b> ${res.clientName}</div>
+                <div style="margin-top: 3px; font-size: 11px; color: #27ae60;">🛍️ <b>${translateTerm('typ dostawy', currentChefLanguage)}:</b> ${deliveryTypeText}</div>
+                <div style="margin-top: 5px; margin-bottom: 5px;">${itemsHtml}</div>
+                <div style="margin-bottom: 4px; font-size: 12px; color: #555;">➕ <b>${translateTerm('ogólne dodatki', currentChefLanguage)}:</b> ${extrasText}</div>
+                ${locationHtmlSnippet}
+                ${vipDetailsHtml}
+                <div style="margin-top: 4px; margin-bottom: 4px;">✍️ <b>${translateTerm('podpis', currentChefLanguage)}:</b> ${signatureHtml}</div>
+                <div style="color: #555; font-size: 11px; margin-top: 2px;">
+                    🕒 ${translateTerm('gotowe na', currentChefLanguage)}: <b>${chefTimeDisplay}</b>
+                </div>
+                <div class="action-buttons">
+                    <button type="button" class="btn-edit" onclick="window.editReservation(${res.id})">${translateTerm('edytuj', currentChefLanguage)}</button>
+                    <button type="button" class="btn-danger" onclick="window.deleteReservation(${res.id})">${translateTerm('usuń', currentChefLanguage)}</button>
+                </div>
+            `;
+            listContainer.appendChild(card);
+        });
+    }
+
+    window.deleteReservation = function(id) {
+        if (confirm('Na pewno chcesz usunąć to zamówienie?')) {
+            reservations = reservations.filter(res => res.id !== id);
+            localStorage.setItem('reservations', JSON.stringify(reservations));
+            renderReservations(); 
+        }
+    };
+
+    window.editReservation = function(id) {
+        const res = reservations.find(r => r.id === id);
+        if (res) {
+            editingId = id;
+            document.getElementById('category').value = res.category;
+            
+            if (res.category === 'VIP') isVipUnlocked = true; 
+            handleCategoryChange();
+
+            const labels = getCustomLabels()[currentLanguage];
+            if (res.deliveryType) {
+                document.getElementById('deliveryType').value = res.deliveryType;
+            } else {
+                document.getElementById('deliveryType').value = labels.onSite;
+            }
+            checkMainDeliveryTypeVisibility();
+
+            try {
+                const orderData = JSON.parse(res.orderContent);
+                
+                if (orderData.food) {
+                    if (document.getElementById('order_food')) document.getElementById('order_food').value = orderData.food.text;
+                    const fParts = orderData.food.amount.split(' ');
+                    if (document.getElementById('order_food_val')) document.getElementById('order_food_val').value = fParts[0] || '';
+                    if (document.getElementById('order_food_unit')) document.getElementById('order_food_unit').value = fParts.slice(1).join(' ') || '🍽️ porcja';
+                }
+                if (orderData.drinks) {
+                    if (document.getElementById('order_drinks')) document.getElementById('order_drinks').value = orderData.drinks.text;
+                    const dParts = orderData.drinks.amount.split(' ');
+                    if (document.getElementById('order_drinks_val')) document.getElementById('order_drinks_val').value = dParts[0] || '';
+                    if (document.getElementById('order_drinks_unit')) document.getElementById('order_drinks_unit').value = dParts.slice(1).join(' ') || '🥛 szklanka';
+                }
+                if (orderData.snacks) {
+                    if (document.getElementById('order_snacks')) document.getElementById('order_snacks').value = orderData.snacks.text;
+                    const sParts = orderData.snacks.amount.split(' ');
+                    if (document.getElementById('order_snacks_val')) document.getElementById('order_snacks_val').value = sParts[0] || '';
+                    if (document.getElementById('order_snacks_unit')) document.getElementById('order_snacks_unit').value = sParts.slice(1).join(' ') || '📦 sztuka';
+                }
+            } catch(e) {
+                if (document.getElementById('order_food')) document.getElementById('order_food').value = res.orderContent;
+            }
+
+            document.getElementById('extras').value = res.extras || '';
+            setSelectedLocation(res.location || 'Pokój', res.deliveryType);
+
+            if (res.category === 'VIP') {
+                setGridValues('gridExtras', res.vipPremiumExtras);
+                setGridValues('gridServing', res.vipServing);
+            } else {
+                clearGrids();
+            }
+
+            if (res.timeTarget === "NOW") {
+                selectNowTime();
+            } else if (res.timeTarget) {
+                isNowSelected = false;
+                document.getElementById('btnNowText').classList.remove('active-now');
+                const parts = res.timeTarget.split('T');
+                if (parts.length === 2) {
+                    document.getElementById('customDateInput').value = parts[0];
+                    renderCustomTimeSlots();
+                    const buttons = document.querySelectorAll('#customTimeSlotsContainer button');
+                    for(let btn of buttons) {
+                        if(!btn.disabled && btn.innerText.includes(parts[1])) {
+                            btn.click();
+                            break;
+                        }
+                    }
+                }
+            }
+
+            document.getElementById('clientName').value = res.clientName;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if(res.signature && res.signature !== "Brak podpisu") {
+                const img = new Image();
+                img.onload = function() { 
+                    ctx.drawImage(img, 0, 0); 
+                    isCanvasBlank = false;
+                };
+                img.src = res.signature;
+                document.querySelector('.signature-hint').style.opacity = '0';
+            } else {
+                isCanvasBlank = true;
+                document.querySelector('.signature-hint').style.opacity = '1';
+            }
+
+            document.getElementById('submitBtn').innerText = "Zapisz zmiany";
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+
+    autoCleanOldReservations();
+    setLanguage('pl');
+    updateWelcomeTiles();
+    initCustomDatePicker();
+</script>
+
+</body>
+</html>
